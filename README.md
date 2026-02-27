@@ -1,4 +1,6 @@
-# 🧠 M-RAG — Multimodal Agentic RAG Framework
+ 🧠 M-RAG — Multimodal Agentic RAG Framework
+
+#<img width="1851" height="3208" alt="3" src="https://github.com/user-attachments/assets/f0703054-91ed-483e-b3f9-a08d11b42233" />
 <img width="1851" height="3180" alt="1" src="https://github.com/user-attachments/assets/d59c9eb7-a5f2-4bbc-a8d8-f1e495da5593" />
 <img width="1851" height="4689" alt="2" src="https://github.com/user-attachments/assets/5cf13139-2c2c-4233-a4dd-6b275ec5b99e" />
 
