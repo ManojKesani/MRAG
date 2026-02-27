@@ -1,0 +1,1180 @@
+# ===============================================
+# M-RAG FULL PROJECT DUMP
+# Generated automatically - ready to share
+# ===============================================
+
+
+
+=== FILE: mrag_project_dump.txt ===
+============================================================
+
+============================================================
+
+
+=== FILE: __init__.py ===
+============================================================
+from .state import IngestionState
+from .elements import (
+    BaseElement, TextElement, ImageElement,
+    TableElement
+)
+
+__all__ = [
+    "IngestionState",
+    "BaseElement", "TextElement", "ImageElement",
+    "TableElement",
+]
+
+============================================================
+
+
+=== FILE: state.py ===
+============================================================
+from typing import TypedDict, List, Annotated, Dict, Any, Union
+import operator
+from .elements import BaseElement
+
+class IngestionState(TypedDict):
+    """
+    The state object passed between LangGraph nodes.
+    """
+    file_path: str
+    elements: Annotated[List[BaseElement], operator.add]
+    config: Dict[str, Any] 
+    next_step: str
+    metrics: Dict[str, Any]
+    document_id: str
+
+
+
+# import logging
+# import uuid
+# from typing import Annotated, List, Dict, Any, Optional
+# from typing_extensions import TypedDict
+# from pydantic import BaseModel, Field
+
+# # Setup module-level logger
+# logger = logging.getLogger(__name__)
+
+# # --- Models ---
+# class BaseElement(BaseModel):
+#     element_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+#     type: str  
+#     content: Any               
+#     metadata: Dict[str, Any] = Field(default_factory=dict)
+#     children: List["BaseElement"] = Field(default_factory=list)
+
+# # --- Reducers (The logical heart of the state) ---
+
+# def reduce_elements(left: List[BaseElement], right: List[BaseElement]) -> List[BaseElement]:
+#     """Append + dedupe logic with visibility into merge conflicts."""
+#     if not right:
+#         return left
+    
+#     seen = {e.element_id for e in left}
+#     new_elements = []
+#     duplicates = 0
+
+#     for e in right:
+#         if e.element_id not in seen:
+#             new_elements.append(e)
+#             seen.add(e.element_id)
+#         else:
+#             duplicates += 1
+
+#     if duplicates > 0:
+#         logger.debug(f"[REDUCER] Deduplicated {duplicates} elements during state merge.")
+    
+#     if new_elements:
+#         logger.debug(f"[REDUCER] Added {len(new_elements)} new elements to state.")
+
+#     return left + new_elements
+
+# def reduce_chunks(left: List[BaseElement], right: List[BaseElement]) -> List[BaseElement]:
+#     """Same as elements, but often where parent-child mapping errors occur."""
+#     return reduce_elements(left, right)
+
+# def reduce_errors(left: List[str], right: List[str]) -> List[str]:
+#     """Log errors as they are appended to the global state."""
+#     for error in right:
+#         logger.error(f"[STATE ERROR] {error}")
+#     return (left or []) + (right or [])
+
+# # --- IngestionState ---
+
+# class IngestionState(TypedDict, total=False):
+#     file_path: str
+#     document_id: str
+#     file_type: str
+#     elements: List[BaseElement]
+#     chunks: List[BaseElement]
+#     embeddings: List[Dict]
+#     metadata: Dict[str, Any]
+#     status: str
+#     errors: List[str]
+#     embedding_config: Dict[str, str]
+
+# # State with reducers for LangGraph
+# StateSchema = Annotated[IngestionState, {
+#     "elements": reduce_elements,
+#     "chunks": reduce_chunks,
+#     "errors": reduce_errors,
+# }]
+
+# class RAGState(TypedDict, total=False):
+#     """State flowing through the RAG graph."""
+#     query: str                       # user question
+#     session_id: Optional[str]        # conversation session
+#     collection: str                  # Qdrant collection to search
+#     top_k: int                       # number of chunks to retrieve
+#     query_embedding: list[float]     # embedded query vector
+#     retrieved_chunks: list[dict]     # raw retrieval results
+#     reranked_chunks: list[dict]      # reranked subset
+#     context: str                     # formatted context string
+#     answer: str                      # final LLM answer
+#     sources: list[str]               # source file references
+#     error: Optional[str]
+============================================================
+
+
+=== FILE: elements.py ===
+============================================================
+# import logging
+# from pydantic import BaseModel, Field
+# from typing import List, Dict, Any, Literal, Union, Optional
+# from PIL import Image
+# import uuid
+
+# # Get logger for domain models
+# logger = logging.getLogger(__name__)
+
+# ElementType = Literal["text", "image", "table", "audio"]
+
+# class BaseElement(BaseModel):
+#     element_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+#     type: ElementType
+#     content: Any
+#     metadata: Dict[str, Any] = Field(default_factory=dict)
+#     children: List["BaseElement"] = Field(default_factory=list)
+
+#     embedding: Optional[List[float]] = None
+#     embedding_model: Optional[str] = None
+
+#     def get_text_for_retrieval(self) -> str:
+#         """Unified text representation logic with logging for debugging retrieval paths."""
+        
+#         # 1. Check for processed multimodal descriptions
+#         if isinstance(self, ImageElement) and self.description:
+#             logger.debug(f"Retrieval: Using description for Image {self.element_id}")
+#             return self.description
+            
+#         if isinstance(self, AudioElement) and self.transcription:
+#             logger.debug(f"Retrieval: Using transcription for Audio {self.element_id}")
+#             return self.transcription
+            
+#         # 2. Check for raw text content
+#         if isinstance(self.content, str):
+#             # We don't log here to avoid flooding, as this is the standard path
+#             return self.content
+            
+#         # 3. Fallback path (potential quality issue)
+#         logger.warning(
+#             f"Retrieval fallback: Element {self.element_id} (type: {self.type}) "
+#             f"has no specialized text. Using str() conversion."
+#         )
+#         return str(self.content)
+
+#     class Config:
+#         arbitrary_types_allowed = True 
+
+# # --- Subclasses (Keep these as pure schemas) ---
+
+# class TextElement(BaseElement):
+#     type: ElementType = "text"
+#     content: str
+
+# class ImageElement(BaseElement):
+#     type: ElementType = "image"
+#     content: Image.Image
+#     description: str = ""
+
+# class TableElement(BaseElement):
+#     type: ElementType = "table"
+#     content: str # markdown
+
+# class AudioElement(BaseElement):
+#     type: ElementType = "audio"
+#     content: str
+#     transcription: str = ""
+
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+from PIL import Image
+
+@dataclass
+class BaseElement:
+    element_id: str = field(default_factory=lambda: str(uuid4()))
+    content: Any = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    children: List["BaseElement"] = field(default_factory=list) # For Hierarchical chunking
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert element to dict for LangGraph persistence or JSON export."""
+        return {
+            "element_id": self.element_id,
+            "type": self.__class__.__name__,
+            "metadata": self.metadata,
+            "children": [c.to_dict() for c in self.children]
+        }
+    
+    embedding: Optional[List[float]] = None
+    
+    def has_embedding(self) -> bool:
+        return self.embedding is not None and len(self.embedding) > 0
+
+@dataclass
+class TextElement(BaseElement):
+    content: str = ""
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        d["content"] = self.content
+        return d
+
+@dataclass
+class ImageElement(BaseElement):
+    content: Optional[Image.Image] = None  # Live object for local use
+    base64_data: Optional[str] = None
+
+@dataclass
+class TableElement(BaseElement):
+    content: str = "" # Usually Markdown string
+============================================================
+
+
+=== FILE: llm_src.py ===
+============================================================
+"""LLM + vision model factory via LangChain-Groq."""
+
+from __future__ import annotations
+
+import os
+import logging
+from functools import lru_cache
+
+from langchain_groq import ChatGroq
+
+# Setup module-level logger
+logger = logging.getLogger(__name__)
+from dotenv import load_dotenv
+load_dotenv()
+
+LLM_MODEL: str = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
+VISION_MODEL: str = os.getenv("VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+
+@lru_cache(maxsize=1)
+def get_llm() -> ChatGroq:
+    """Return a cached ChatGroq LLM instance with config validation."""
+    if not GROQ_API_KEY:
+        logger.error("GROQ_API_KEY is missing from environment variables.")
+        raise ValueError("GROQ_API_KEY not set.")
+
+    logger.info(f"Initializing standard LLM | Model: {LLM_MODEL} | Temp: 0.0")
+    
+    return ChatGroq(
+        model=LLM_MODEL,
+        api_key=GROQ_API_KEY,
+        temperature=0.0,
+        max_tokens=2048,
+    )
+
+@lru_cache(maxsize=1)
+def get_vision_llm() -> ChatGroq:
+    """Return a cached ChatGroq vision-capable instance with config validation."""
+    if not GROQ_API_KEY:
+        logger.error("GROQ_API_KEY is missing from environment variables.")
+        raise ValueError("GROQ_API_KEY not set.")
+
+    logger.info(f"Initializing Vision LLM | Model: {VISION_MODEL} | Temp: 0.0")
+    
+    return ChatGroq(
+        model=VISION_MODEL,
+        api_key=GROQ_API_KEY,
+        temperature=0.0,
+        max_tokens=512,
+    )
+
+import io
+import base64
+from PIL import Image
+from langchain_core.messages import HumanMessage
+
+def call_vision_llm(
+    image: Image.Image,
+    prompt: str = "Describe this image in detail for retrieval in a RAG system. Focus on visible objects, text, layout, and context."
+) -> str:
+    """Vision convenience wrapper used by ImageDescriber."""
+    llm = get_vision_llm()
+    
+    # Convert PIL → base64 for Groq/Llama-3.2-vision
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    img_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+    message = HumanMessage(content=[
+        {"type": "text", "text": prompt},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+        }
+    ])
+    
+    response = llm.invoke([message])
+    return response.content.strip()
+============================================================
+
+
+=== FILE: databases.py ===
+============================================================
+import logging
+import os
+import time
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelSession
+from sqlalchemy import text
+
+# Setup module-level logger
+logger = logging.getLogger(__name__)
+
+DATABASE_URL: str = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://mrag:mrag_secret@localhost:5432/mrag",
+)
+
+# engine: Set echo=True only for local debugging to see raw SQL
+engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+
+async def init_db() -> None:
+    """Create all tables (idempotent)."""
+    logger.info("Initializing database: Checking and creating tables...")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+        logger.info("Database initialization complete.")
+    except Exception as e:
+        logger.error(f"Database initialization FAILED: {e}")
+        raise
+
+@asynccontextmanager
+async def get_session() -> AsyncGenerator[SQLModelSession, None]:
+    """Yield an async SQLModel session with transaction logging."""
+    start_time = time.perf_counter()
+    session_id = id(start_time) # Simple unique ID for tracing the session
+    
+    logger.debug(f"[DB SESSION {session_id}] Opening session.")
+    
+    async with SQLModelSession(engine) as session:
+        try:
+            yield session
+            await session.commit()
+            duration = time.perf_counter() - start_time
+            logger.debug(f"[DB SESSION {session_id}] Committed | Duration: {duration:.3f}s")
+        except Exception as e:
+            await session.rollback()
+            duration = time.perf_counter() - start_time
+            logger.error(f"[DB SESSION {session_id}] ROLLBACK due to error: {e} | Duration: {duration:.3f}s")
+            raise
+        finally:
+            # SQLModelSession closes automatically via 'async with', 
+            # but we log the end of the context
+            pass
+
+async def check_db_connection() -> None:
+    """Verify Postgres connection on startup."""
+    logger.info("Checking database connection...")
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database connection verified successfully.")
+    except Exception as e:
+        logger.critical(f"FATAL: Database is unreachable at {DATABASE_URL}. Error: {e}")
+        raise
+============================================================
+
+
+=== FILE: loaders/image.py ===
+============================================================
+# core/loaders/image.py
+import io
+import base64
+from PIL import Image
+from typing import List, Any
+from ..elements import ImageElement, BaseElement
+from .base import BaseLoader
+
+class ImageLoader(BaseLoader):
+    @staticmethod
+    def to_base64(img: Image.Image) -> str:
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+
+    @staticmethod
+    def process_raw_bytes(data: bytes, metadata: dict) -> ImageElement:
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.load()
+        
+        # Add dimensions to metadata automatically
+        metadata.update({"width": img.width, "height": img.height})
+        
+        return ImageElement(
+            content=img,
+            base64_data=ImageLoader.to_base64(img),
+            metadata=metadata
+        )
+
+    @staticmethod
+    def load(file_path: str, **kwargs) -> List[BaseElement]:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return [ImageLoader.process_raw_bytes(data, {"source": file_path})]
+============================================================
+
+
+=== FILE: loaders/__init__.py ===
+============================================================
+from .text import TextLoader
+from .image import ImageLoader
+from .pdf import PDFLoader
+
+LOADER_MAPPING = {
+    ".pdf": PDFLoader,
+    ".txt": TextLoader,
+    ".md": TextLoader,
+    ".png": ImageLoader,
+    ".jpg": ImageLoader,
+    ".jpeg": ImageLoader,
+}
+
+def get_loader_for_file(file_path: str):
+    import os
+    ext = os.path.splitext(file_path.lower())[1]
+    loader_cls = LOADER_MAPPING.get(ext)
+    if not loader_cls:
+        raise ValueError(f"No loader found for extension: {ext}")
+    return loader_cls
+
+__all__ = ["TextLoader", "ImageLoader", "PDFLoader", "get_loader_for_file"]
+============================================================
+
+
+=== FILE: loaders/pdf.py ===
+============================================================
+import fitz
+import logging
+from typing import List
+from ..elements import BaseElement, TextElement, TableElement
+from .base import BaseLoader
+from .image import ImageLoader # Import the peer loader
+
+logger = logging.getLogger(__name__)
+
+class PDFLoader(BaseLoader):
+    @staticmethod
+    def load(file_path: str) -> List[BaseElement]:
+        doc = fitz.open(file_path)
+        elements: List[BaseElement] = []
+
+        for page_num in range(len(doc)):
+            page = doc[page_num] 
+            curr = page_num + 1
+            
+            # 1. Text
+            text = page.get_text("text").strip()
+            if text:
+                elements.append(TextElement(content=text, metadata={"page": curr}))
+
+            # 2. Images - Using ImageLoader's logic
+            for img_info in page.get_images(full=True):
+                xref = img_info[0]
+                base_img = doc.extract_image(xref)
+                if base_img:
+                    # Delegate processing to ImageLoader
+                    img_el = ImageLoader.process_raw_bytes(
+                        base_img["image"], 
+                        {"page": curr, "xref": xref, "ext": base_img["ext"]}
+                    )
+                    elements.append(img_el)
+
+            # # 3. Tables
+            # try:
+            #     for t in page.find_tables().tables:
+            #         elements.append(TableElement(
+            #             content=t.to_markdown(), 
+            #             metadata={"page": curr}
+            #         ))
+            # except Exception:
+            #     pass 
+
+        doc.close()
+        return elements
+============================================================
+
+
+=== FILE: loaders/base.py ===
+============================================================
+from abc import ABC, abstractmethod
+from typing import List
+from ..elements import BaseElement
+
+class BaseLoader(ABC):
+    @staticmethod
+    @abstractmethod
+    def load(file_path: str) -> List[BaseElement]:
+        """Return flat list of elements. Pure. No side effects."""
+        ...
+============================================================
+
+
+=== FILE: loaders/text.py ===
+============================================================
+from typing import List
+from ..elements import TextElement, BaseElement
+from .base import BaseLoader
+
+class TextLoader(BaseLoader):
+    @staticmethod
+    def load(file_path: str) -> List[BaseElement]:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return [TextElement(content=content, metadata={"source": file_path})]
+============================================================
+
+
+=== FILE: chunkers/__init__.py ===
+============================================================
+from .base import BaseChunker
+from .recursive import RecursiveChunker
+from .hierarchical import HierarchicalChunker
+from .semantic import SemanticChunker
+
+# A mapping for dynamic selection in your LangGraph nodes
+CHUNKER_MAPPING = {
+    "recursive": RecursiveChunker,
+    "hierarchical": HierarchicalChunker,
+    "semantic": SemanticChunker
+}
+
+def get_chunker(method: str = "recursive", **kwargs) -> BaseChunker:
+    """Factory function to initialize a chunker with specific settings."""
+    chunker_cls = CHUNKER_MAPPING.get(method.lower())
+    if not chunker_cls:
+        raise ValueError(f"Unknown chunking method: {method}")
+    return chunker_cls(**kwargs)
+
+__all__ = [
+    "BaseChunker",
+    "RecursiveChunker",
+    "HierarchicalChunker",
+    "SemanticChunker",
+    "get_chunker"
+]
+============================================================
+
+
+=== FILE: chunkers/hierarchical.py ===
+============================================================
+import logging
+from typing import List
+import os
+
+from ..elements import BaseElement, TextElement
+from .base import BaseChunker
+from .recursive import RecursiveChunker  # reuse existing logic
+
+logger = logging.getLogger(__name__)
+
+
+class HierarchicalChunker(BaseChunker):
+    """
+    Hierarchical (Parent → Child) chunker.
+    - Returns parent chunks at top level.
+    - Each parent has .children (small chunks) → matches BaseChunker docstring.
+    """
+
+    def __init__(
+        self,
+        parent_chunk_size: int = 2000,
+        child_chunk_size: int = 800,
+        chunk_overlap: int = 100,
+    ):
+        self.parent_chunker = RecursiveChunker(
+            chunk_size=parent_chunk_size, chunk_overlap=chunk_overlap
+        )
+        self.child_chunker = RecursiveChunker(
+            chunk_size=child_chunk_size, chunk_overlap=chunk_overlap // 2
+        )
+
+        self.parent_chunk_size = parent_chunk_size
+        self.child_chunk_size = child_chunk_size
+
+    def chunk(self, elements: List[BaseElement]) -> List[BaseElement]:
+        # 1. Create larger parent chunks
+        parents = self.parent_chunker.chunk(elements)
+        final_chunks: List[BaseElement] = []
+
+        logger.debug(
+            f"Starting hierarchical chunking: parent={self.parent_chunk_size}, "
+            f"child={self.child_chunk_size}"
+        )
+
+        for parent in parents:
+            if not isinstance(parent, TextElement):
+                final_chunks.append(parent)
+                continue
+
+            # 2. Create child chunks from this parent only
+            children = self.child_chunker.chunk([parent])
+
+            # Attach children for hierarchy
+            parent.children = []  # BaseElement / TextElement supports this (per docstring)
+            for child in children:
+                if isinstance(child, TextElement):
+                    child.metadata.update(
+                        {
+                            "chunk_type": "child",
+                            "parent_id": getattr(parent, "element_id", None),
+                            "chunking_method": "hierarchical",
+                        }
+                    )
+                    parent.children.append(child)
+
+            # Parent gets its own metadata
+            parent.metadata.update(
+                {
+                    "chunk_type": "parent",
+                    "chunking_method": "hierarchical",
+                }
+            )
+
+            final_chunks.append(parent)  # only parents go to top-level list
+
+        logger.info(
+            f"Hierarchical chunking complete: {len(parents)} parent chunks "
+            f"(each with child chunks in .children)"
+        )
+        return final_chunks
+============================================================
+
+
+=== FILE: chunkers/recursive.py ===
+============================================================
+import logging
+from typing import List
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from ..elements import BaseElement, TextElement
+from .base import BaseChunker
+
+# Get a logger specific to this module
+logger = logging.getLogger(__name__)
+
+class RecursiveChunker(BaseChunker):
+    def __init__(self, chunk_size: int = 128, chunk_overlap: int = 32):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+
+    def chunk(self, elements: List[BaseElement]) -> List[BaseElement]:
+        chunks: List[BaseElement] = []
+        text_element_count = 0
+        other_element_count = 0
+
+        logger.debug(f"Starting chunking: size={self.chunk_size}, overlap={self.chunk_overlap}")
+
+        for el in elements:
+            if isinstance(el, TextElement):
+                text_element_count += 1
+                # Optional: log very large text elements that might cause bottlenecks
+                if len(el.content) > 5000:
+                    logger.debug(f"Splitting large TextElement (ID: {el.element_id}, Chars: {len(el.content)})")
+                
+                texts = self.splitter.split_text(el.content)
+                
+                for i, txt in enumerate(texts):
+                    chunks.append(TextElement(
+                        content=txt,
+                        metadata={
+                            **el.metadata, 
+                            "chunk_index": i, 
+                            "parent_id": el.element_id
+                        }
+                    ))
+            else:
+                # Non-text elements (Images/Tables) are passed through
+                other_element_count += 1
+                chunks.append(el)
+
+        logger.info(
+            f"Chunking complete: {text_element_count} text elements split into {len(chunks) - other_element_count} chunks. "
+            f"{other_element_count} non-text elements preserved."
+        )
+
+        return chunks
+============================================================
+
+
+=== FILE: chunkers/semantic.py ===
+============================================================
+import logging
+from typing import List, Optional
+import numpy as np
+
+from ..elements import BaseElement, TextElement
+from ..embedders.text import TextEmbedder  # Local import
+from .base import BaseChunker
+
+logger = logging.getLogger(__name__)
+
+class SemanticChunker(BaseChunker):
+    """
+    Semantic similarity-based chunker using local TextEmbedder.
+    Splits text into sentences, embeds them, and breaks when similarity drops.
+    """
+
+    def __init__(
+        self,
+        embedder: Optional[TextEmbedder] = None,
+        breakpoint_threshold: float = 0.8, # Adjust based on model (0.0 to 1.0)
+    ):
+        # Use local TextEmbedder logic
+        self.embedder = embedder or TextEmbedder()
+        self.breakpoint_threshold = breakpoint_threshold
+        logger.info(f"SemanticChunker initialized with threshold {breakpoint_threshold}")
+
+    def _split_sentences(self, text: str) -> List[str]:
+        """Simple sentence splitter; can be swapped for nltk/spacy."""
+        import re
+        sentences = re.split(r'(?<=[.!?]) +', text)
+        return [s.strip() for s in sentences if s.strip()]
+
+    def chunk(self, elements: List[BaseElement]) -> List[BaseElement]:
+        final_chunks: List[BaseElement] = []
+
+        for el in elements:
+            if not isinstance(el, TextElement) or not el.content.strip():
+                final_chunks.append(el)
+                continue
+
+            sentences = self._split_sentences(el.content)
+            if len(sentences) <= 1:
+                final_chunks.append(el)
+                continue
+
+            # 1. Get embeddings for all sentences using your local logic
+            embeddings = np.array(self.embedder.embed(sentences))
+            
+            # 2. Calculate cosine similarity between adjacent sentences
+            # Formula: (A . B) / (||A|| * ||B||) - Note: TextEmbedder normalizes already
+            clusters = []
+            current_cluster = [sentences[0]]
+            
+            for i in range(len(sentences) - 1):
+                similarity = np.dot(embeddings[i], embeddings[i+1])
+                
+                if similarity < self.breakpoint_threshold:
+                    clusters.append(" ".join(current_cluster))
+                    current_cluster = [sentences[i+1]]
+                else:
+                    current_cluster.append(sentences[i+1])
+            
+            clusters.append(" ".join(current_cluster))
+
+            # 3. Create new TextElements
+            for i, cluster_text in enumerate(clusters):
+                final_chunks.append(
+                    TextElement(
+                        content=cluster_text,
+                        metadata={
+                            **el.metadata,
+                            "chunk_index": i,
+                            "parent_id": getattr(el, "element_id", None),
+                            "chunking_method": "semantic_local",
+                        },
+                    )
+                )
+
+        logger.info(f"Semantic chunking complete. Generated {len(final_chunks)} chunks.")
+        return final_chunks
+============================================================
+
+
+=== FILE: chunkers/base.py ===
+============================================================
+from abc import ABC, abstractmethod
+from typing import List
+from ..elements import BaseElement
+
+class BaseChunker(ABC):
+    @abstractmethod
+    def chunk(self, elements: List[BaseElement]) -> List[BaseElement]:
+        """Return list of chunk elements (may have .children for hierarchy)."""
+        ...
+============================================================
+
+
+=== FILE: processors/image_describer.py ===
+============================================================
+import logging
+from typing import List, Optional
+from PIL import Image
+import io
+import base64
+from ..elements import ImageElement, TextElement
+# Assuming you have a standard LLM caller in core/llm_src.py
+from ..llm_src import call_vision_llm 
+
+logger = logging.getLogger(__name__)
+
+class ImageDescriber:
+    """Uses a Vision LLM to turn ImageElements into descriptive TextElements."""
+    
+    def __init__(self, prompt: str = "Describe this image in detail for a RAG search index."):
+        self.prompt = prompt
+
+    def describe(self, image_elements: List[ImageElement]) -> List[TextElement]:
+        """Converts ImageElements to TextElements with the same metadata."""
+        described_elements = []
+        
+        for img_el in image_elements:
+            try:
+                # 1. Get image (from PIL object or Base64)
+                img_data = img_el.content
+                
+                # 2. Call Vision LLM (Logic resides in your llm_src.py)
+                description = call_vision_llm(img_data, self.prompt)
+                
+                # 3. Create a new TextElement that "replaces" the ImageElement
+                # We preserve the original ID and metadata for traceability
+                text_el = TextElement(
+                    element_id=img_el.element_id,
+                    content=description,
+                    metadata={
+                        **img_el.metadata,
+                        "original_type": "image",
+                        "description_method": "vision_llm"
+                    }
+                )
+                described_elements.append(text_el)
+                
+                logger.info(f"Successfully described image {img_el.element_id}")
+            except Exception as e:
+                logger.error(f"Failed to describe image {img_el.element_id}: {e}")
+                
+        return described_elements
+============================================================
+
+
+=== FILE: storers/base.py ===
+============================================================
+from abc import ABC, abstractmethod
+from typing import List
+from ..elements import BaseElement
+
+class BaseStorer(ABC):
+    @abstractmethod
+    def store(self, elements: List[BaseElement], collection_name: str):
+        """Upload elements to the vector database."""
+        ...
+============================================================
+
+
+=== FILE: storers/qdrant.py ===
+============================================================
+import logging
+from typing import List, Dict, Any
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+from ..elements import BaseElement, TextElement, ImageElement
+from .base import BaseStorer
+
+logger = logging.getLogger(__name__)
+
+class QdrantStorer(BaseStorer):
+    def __init__(self, host: str = "localhost", port: int = 6333, api_key: str = None):
+        self.client = QdrantClient(host=host, port=port, api_key=api_key)
+        logger.info(f"Connected to Qdrant at {host}:{port}")
+
+    def _ensure_collection(self, collection_name: str, vector_config: Dict[str, int]):
+        if not self.client.collection_exists(collection_name):
+            vectors_config = {
+                name: models.VectorParams(size=dim, distance=models.Distance.COSINE)
+                for name, dim in vector_config.items()
+            }
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=vectors_config
+            )
+            logger.info(f"Created fresh collection '{collection_name}'")
+
+    def store(self, elements: List[BaseElement], collection_name: str):
+        if not elements:
+            return
+
+        points = []
+        vector_config = {}
+        VECTOR_NAME = "vector"   # ← Unified name for multimodal CLIP (fixes the error)
+
+        for el in elements:
+            if not getattr(el, "embedding", None):
+                continue
+
+            if VECTOR_NAME not in vector_config:
+                vector_config[VECTOR_NAME] = len(el.embedding)
+
+            payload = {
+                "type": type(el).__name__,
+                "metadata": getattr(el, "metadata", {}),
+            }
+            if isinstance(el, TextElement):
+                payload["content"] = el.content
+            elif isinstance(el, ImageElement):
+                payload["base64_data"] = getattr(el, "base64_data", None)
+
+            points.append(models.PointStruct(
+                id=el.element_id,
+                vector={VECTOR_NAME: el.embedding},
+                payload=payload
+            ))
+
+        self._ensure_collection(collection_name, vector_config)
+        self.client.upsert(collection_name=collection_name, points=points)
+        logger.info(f"✅ Successfully stored {len(points)} points in '{collection_name}'")
+============================================================
+
+
+=== FILE: utils/logging.py ===
+============================================================
+import time
+import logging
+import functools
+from typing import Callable, Any
+
+logger = logging.getLogger("ingestion_pipeline")
+
+def log_node(func: Callable):
+    @functools.wraps(func)
+    def wrapper(state: Any, *args, **kwargs):
+        node_name = func.__name__.replace("node_", "").upper()
+        doc_id = state.get("document_id", "unknown")
+        
+        logger.info(f"[{node_name}] Starting | Doc: {doc_id}")
+        start_time = time.perf_counter()
+        
+        try:
+            result = func(state, *args, **kwargs)
+            
+            end_time = time.perf_counter()
+            duration = end_time - start_time
+            
+            # Context-aware counts
+            count = len(result.get("chunks", [])) or len(result.get("elements", []))
+            logger.info(f"[{node_name}] Finished | Items: {count} | Time: {duration:.2f}s")
+            
+            return result
+        except Exception as e:
+            logger.error(f"[{node_name}] FAILED | Doc: {doc_id} | Error: {str(e)}")
+            raise e
+            
+    return wrapper
+============================================================
+
+
+=== FILE: embedders/image.py ===
+============================================================
+import logging
+from typing import List
+from PIL import Image
+import torch
+from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
+
+
+class ImageEmbedder:
+    """CLIP image-only embedder."""
+
+    def __init__(self, model_name: str = "clip-ViT-B-32"):
+        self._model_name = model_name
+        logger.info(f"Loading CLIP image embedder: {model_name}")
+        self.model = SentenceTransformer(model_name)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = self.model.to(self.device)
+
+    def embed(self, images: List[Image.Image]) -> List[List[float]]:
+        """Batch embed PIL Images."""
+        if not images:
+            return []
+        logger.debug(f"Embedding {len(images)} images with {self.model_name}...")
+        embeddings = self.model.encode(
+            images,
+            batch_size=16,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )
+        return embeddings.tolist()
+    
+    @property
+    def dimension(self) -> int:
+        return self.model.get_sentence_embedding_dimension()
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+============================================================
+
+
+=== FILE: embedders/__init__.py ===
+============================================================
+from .base import BaseEmbedder
+from .text import TextEmbedder
+from .image import ImageEmbedder
+from .multimodal import MultimodalEmbedder
+
+# Registry for LangGraph nodes to select the embedding engine
+EMBEDDER_MAPPING = {
+    "text": TextEmbedder,
+    "image": ImageEmbedder,
+    "multimodal": MultimodalEmbedder
+}
+
+def get_embedder(type: str = "text", **kwargs) -> BaseEmbedder:
+    """Factory to initialize the requested embedder."""
+    embedder_cls = EMBEDDER_MAPPING.get(type.lower())
+    if not embedder_cls:
+        raise ValueError(f"Unknown embedder type: {type}. Choose from {list(EMBEDDER_MAPPING.keys())}")
+    return embedder_cls(**kwargs)
+
+__all__ = ["BaseEmbedder", "TextEmbedder", "ImageEmbedder", "MultimodalEmbedder", "get_embedder"]
+============================================================
+
+
+=== FILE: embedders/multimodal.py ===
+============================================================
+import logging
+from typing import List, Union
+from PIL import Image
+import torch
+from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
+
+
+class MultimodalEmbedder:
+    """Unified CLIP embedder – text AND images share the exact same vector space."""
+
+    def __init__(self, model_name: str = "clip-ViT-B-32"):
+        self._model_name = model_name
+        logger.info(f"Loading unified multimodal CLIP: {model_name}")
+        self.model = SentenceTransformer(model_name)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = self.model.to(self.device)
+
+    def embed(self, items: List[Union[str, Image.Image]]) -> List[List[float]]:
+        """Accepts mixed list: str (text) or PIL.Image (image)."""
+        if not items:
+            return []
+
+        logger.debug(f"Embedding {len(items)} multimodal items with {self.model_name}...")
+        embeddings = self.model.encode(
+            items,
+            batch_size=16,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )
+        return embeddings.tolist()
+    
+    @property
+    def dimension(self) -> int:
+        return self.model.get_sentence_embedding_dimension()
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+============================================================
+
+
+=== FILE: embedders/base.py ===
+============================================================
+from abc import ABC, abstractmethod
+from typing import List, Dict, Any
+
+class BaseEmbedder(ABC):
+    @abstractmethod
+    def embed(self, items: List[Any]) -> List[List[float]]:
+        """items = list of str (text) or list of PIL.Image (images)"""
+        ...
+
+    @property
+    @abstractmethod
+    def dimension(self) -> int:
+        ...
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
+        ...
+============================================================
+
+
+=== FILE: embedders/text.py ===
+============================================================
+import logging
+from typing import List
+from sentence_transformers import SentenceTransformer
+from .base import BaseEmbedder
+
+logger = logging.getLogger(__name__)
+
+
+class TextEmbedder(BaseEmbedder):
+    """Text-only embedder using SentenceTransformer (all-MiniLM, etc.)."""
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        self._model_name = model_name
+        logger.info(f"Loading text embedder: {model_name}")
+        self.model = SentenceTransformer(model_name)
+
+    def embed(self, texts: List[str]) -> List[List[float]]:
+        """Batch embed list of texts."""
+        if not texts:
+            return []
+        logger.debug(f"Embedding {len(texts)} texts with {self.model_name}...")
+        embeddings = self.model.encode(
+            texts,
+            batch_size=32,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )
+        return embeddings.tolist()
+    
+    @property
+    def dimension(self) -> int:
+        return self.model.get_sentence_embedding_dimension()
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name # Ensure this is set in __init__
+============================================================
