@@ -1,0 +1,11 @@
+terminal 1
+cd tracing_langfuse
+docker compose up
+terminal 2
+docker compose up
+ternunal 3
+python -m cli.main status
+terminal 4
+uvicorn api.main:app --reload --port 8000
+terminal 5
+streamlit run frontend/app.py
